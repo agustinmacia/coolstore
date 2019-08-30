@@ -153,7 +153,7 @@ public class ApiVerticleTest {
             public Void answer(InvocationOnMock invocation) {
             	Handler<AsyncResult<Product>> handler = invocation.getArgument(1);
             	
-                //TODO: return the hard-coded product from the mocked call
+                handler.handle(Future.succeededFuture(product));
             	
                 return null;
              }
@@ -161,12 +161,26 @@ public class ApiVerticleTest {
 
 		Async async = context.async();
 		
-		//TODO: use HttpClient to invoke the '/product/{itemId}' endpoint		
-		//TODO: assert the request response is the JSON representation of the product
+        vertx.createHttpClient().get(port, "localhost", "/product/" + itemId1,
+                response -> {
 
+                    assertThat(response.statusCode(), equalTo(200));
+                    assertThat(response.headers().get("Content-Type"),
+                        equalTo("application/json"));
+                    response.bodyHandler(body -> {
+                        JsonObject json = body.toJsonObject();
+                        Product productResult = new Product(json);
+                        assertThat(productResult, notNullValue());
+                        assertThat(productResult.getItemId(), equalTo("111111"));
+                        assertThat(productResult.getPrice(), equalTo(100.0));
+                        
+                        
 		verify(catalogService).getProduct(any(),any());
 		async.complete();
-		fail("Not implemented yet");
+		
+                    });
+
+                }).exceptionHandler(context.exceptionHandler()).end();
 	}
 
     @Test

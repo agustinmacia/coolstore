@@ -14,31 +14,29 @@ import io.vertx.core.Future;
 import io.vertx.core.json.JsonObject;
 
 public class MainVerticle extends AbstractVerticle {
-
+	
 	@Override
 	public void start(Future<Void> startFuture) throws Exception {
-		deployVerticles(new JsonObject(), startFuture);
+
+		ConfigStoreOptions appStore = new ConfigStoreOptions();
+        appStore.setType("configmap").setFormat("yaml");
+        appStore.setConfig(new JsonObject()
+            .put("name", "app-config")
+            .put("key", "app-config.yaml"));
+		
+		ConfigRetrieverOptions configRetrieverOptions = new ConfigRetrieverOptions();
+		configRetrieverOptions.addStore(appStore);
+		
+		ConfigRetriever retriever = ConfigRetriever.create(vertx, configRetrieverOptions);
+		retriever.getConfig(handler -> {
+			if (handler.succeeded()) {
+				deployVerticles(handler.result(), startFuture);
+			}
+			else {
+				startFuture.fail(handler.cause());
+			}
+		});
 	}
-	
-//	@Override
-//	public void start(Future<Void> startFuture) throws Exception {
-//
-//		ConfigStoreOptions appStore = new ConfigStoreOptions();
-//		//TODO: configure the ConfigStore to use an OpenShift configmap
-//		
-//		ConfigRetrieverOptions configRetrieverOptions = new ConfigRetrieverOptions();
-//		configRetrieverOptions.addStore(appStore);
-//		
-//		ConfigRetriever retriever = ConfigRetriever.create(vertx, configRetrieverOptions);
-//		retriever.getConfig(handler -> {
-//			if (handler.succeeded()) {
-//				deployVerticles(handler.result(), startFuture);
-//			}
-//			else {
-//				startFuture.fail(handler.cause());
-//			}
-//		});
-//	}
 
 	private void deployVerticles(JsonObject config, Future<Void> startFuture) {
 		CatalogService proxy = CatalogService.createProxy(vertx);

@@ -101,8 +101,18 @@ public class CatalogServiceTest extends MongoTestBase {
     		saveAsync.countDown();
     	});
     	
-    	//TODO: add one more product test data to MongoDB
-		saveAsync.countDown();
+        String itemId2 = "222222";
+        JsonObject json2 = new JsonObject()
+            .put("itemId", itemId2)
+            .put("name", "productName2")
+            .put("desc", "productDescription2")
+            .put("price", new Double(100.0));
+        mongoClient.save("products", json2, ar -> {
+            if (ar.failed()) {
+                context.fail();
+            }
+            saveAsync.countDown();
+        });
     	
     	saveAsync.await();
     	
@@ -116,13 +126,17 @@ public class CatalogServiceTest extends MongoTestBase {
     			context.fail(ar.cause().getMessage());
     		}
     		else {
-    	    	//TODO: assert the returned data is the data previously added to MongoDB
-
+    			assertThat(ar.result(), notNullValue());
+                assertThat(ar.result().size(), equalTo(2));
+                Set<String> itemIds = ar.result().stream().map(
+                    p -> p.getItemId()).collect(Collectors.toSet());
+                assertThat(itemIds.size(), equalTo(2));
+                assertThat(itemIds, allOf(hasItem(itemId1),hasItem(itemId2)));
     			async.complete();
     		}
     	});
     	    	
-    	fail("Not implemented yet");
+    	//fail("Not implemented yet");
     }
 
     @Test

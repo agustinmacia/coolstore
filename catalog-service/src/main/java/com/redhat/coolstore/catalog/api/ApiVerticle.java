@@ -9,6 +9,8 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.healthchecks.HealthCheckHandler;
+import io.vertx.ext.healthchecks.Status;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
@@ -25,13 +27,20 @@ public class ApiVerticle extends AbstractVerticle {
 	public void start(Future<Void> startFuture) throws Exception {
 
 		Router router = Router.router(vertx);
-		//TODO: add routes to the Router
-		
-		//TODO: add dummy readiness route to the Router		
-		//TODO: add liveness route to the Router
-
-		//TODO: add the router to the HttpServer
-		vertx.createHttpServer().listen(config().getInteger("catalog.http.port", 8080),
+        router.get("/products").handler(this::getProducts);
+        router.get("/product/:itemId").handler(this::getProduct);
+        router.route("/product").handler(BodyHandler.create());
+        router.post("/product").handler(this::addProduct);
+        router.get("/health/readiness").handler(requestHandler -> {
+            requestHandler.response().end("OK");
+        });
+        
+        HealthCheckHandler healthCheckHandler =
+                HealthCheckHandler.create(vertx).register(
+                    "health", f -> health(f));
+            router.get("/health/liveness").handler(healthCheckHandler);
+        
+		vertx.createHttpServer().requestHandler(router::accept).listen(config().getInteger("catalog.http.port", 8080),
 				result -> {
 					if (result.succeeded()) {
 						startFuture.complete();
@@ -43,7 +52,21 @@ public class ApiVerticle extends AbstractVerticle {
 	}
 
     private void getProducts(RoutingContext rc) {
-    	//TODO: implement this handler 
+        catalogService.getProducts(ar -> {
+            if (ar.succeeded()) {
+                List<Product> products = ar.result();
+                JsonArray json = new JsonArray();
+                products.stream()
+                    .map(p -> p.toJson())
+                    .forEach(p -> json.add(p));
+                rc.response()
+                    .putHeader("Content-type", "application/json")
+                    .end(json.encodePrettily());
+            }
+            else {
+                rc.fail(ar.cause());
+            }
+        });
     }
 
 	private void getProduct(RoutingContext rc) {
@@ -69,8 +92,27 @@ public class ApiVerticle extends AbstractVerticle {
     }
 
 	private void addProduct(RoutingContext rc) {
-		//TODO: implement this handler
+        JsonObject json = rc.getBodyAsJson();
+        catalogService.addProduct(new Product(json), ar -> {
+            if (ar.succeeded()) {
+                rc.response().setStatusCode(201).end();
+            }
+            else {
+                rc.fail(ar.cause());
+            }
+        });
 	}
 
-	//TODO: add health method (handler for the liveness route)
+    private void health(Future<io.vertx.ext.healthchecks.Status> future) {
+        catalogService.ping(ar -> {
+            if (ar.succeeded()) {
+                if (!future.isComplete()) {
+                    future.complete(Status.OK());
+                }
+                else {
+                    future.complete(Status.KO());
+                }
+            }
+        });
+    }
 }
